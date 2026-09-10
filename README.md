@@ -4,13 +4,16 @@ Self-hosted PaaS (Railway/Render-style) for a Windows laptop on Tailscale.
 
 ## Features
 
+- Railway-style UX: email signup/login → choose a plan → create projects
 - Connect a GitHub repo → push deploys the latest commit (signed webhooks)
+- New Project wizard (Deploy from GitHub / Empty project)
 - Manual deploy, stop/restart, redeploy previous image, blue/green cutover + rollback
 - Edit env, port, Dockerfile path, build context, memory/CPU, auto-deploy toggle
 - One-click Postgres/Redis with volumes, private networks, URL injection + redeploy
 - Caddy proxy: `/p/<project>/` (Tailscale-friendly) and optional hostnames
 - Deploy logs + live container logs in the dashboard
-- Admin token auth
+- Per-user sessions + Hobby/Pro plan limits (self-hosted; no Stripe required)
+- Legacy `ADMIN_TOKEN` still works as a bootstrap/admin bearer
 
 ## Cafe PC URLs (current setup)
 
@@ -18,7 +21,7 @@ Self-hosted PaaS (Railway/Render-style) for a Windows laptop on Tailscale.
 |------|-----|
 | Dashboard | http://abhinand:3100 |
 | API | http://abhinand:8180 |
-| Login token | value of `ADMIN_TOKEN` in `.env` |
+| Sign up | http://abhinand:3100/signup |
 | SSH from Mac | `ssh cafe` (port 2222) |
 
 Ports **3100/8180** avoid conflict with Gamespot on 3000/8080.

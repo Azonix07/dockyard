@@ -5,12 +5,8 @@ function resolveApiUrl(): string {
   }
   const env = process.env.NEXT_PUBLIC_API_URL;
   if (env && env.trim()) return env.replace(/\/$/, "");
-  // Same-host default: API on :8180 (Dockyard host mapping)
   if (typeof window !== "undefined") {
     const { protocol, hostname } = window.location;
-    if (window.location.port === "3100" || window.location.port === "") {
-      return `${protocol}//${hostname}:8180`;
-    }
     return `${protocol}//${hostname}:8180`;
   }
   return "http://localhost:8180";
@@ -23,6 +19,10 @@ function token(): string {
 
 export function setToken(value: string) {
   localStorage.setItem("dockyard_token", value);
+}
+
+export function clearToken() {
+  localStorage.removeItem("dockyard_token");
 }
 
 export function getToken() {
@@ -42,7 +42,8 @@ export async function api<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${token()}`);
+  const t = token();
+  if (t) headers.set("Authorization", `Bearer ${t}`);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }

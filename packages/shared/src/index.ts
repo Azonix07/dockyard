@@ -39,13 +39,79 @@ export const JobStatus = z.enum([
 ]);
 export type JobStatus = z.infer<typeof JobStatus>;
 
+export const PlanId = z.enum(["hobby", "pro"]);
+export type PlanId = z.infer<typeof PlanId>;
+
+export const PLANS = {
+  hobby: {
+    id: "hobby" as const,
+    name: "Hobby",
+    priceLabel: "$0",
+    period: "forever",
+    description: "For side projects and learning on your own laptop.",
+    features: [
+      "Up to 5 projects",
+      "512 MB RAM per service",
+      "1 shared vCPU",
+      "Postgres & Redis",
+      "GitHub auto-deploy",
+    ],
+    maxProjects: 5,
+    maxDatabases: 5,
+    defaultMemoryBytes: 536870912,
+    defaultCpuNano: 1_000_000_000,
+  },
+  pro: {
+    id: "pro" as const,
+    name: "Pro",
+    priceLabel: "$0",
+    period: "self-hosted",
+    description: "Higher limits for serious apps on your cafe host.",
+    features: [
+      "Up to 25 projects",
+      "2 GB RAM per service",
+      "2 shared vCPU",
+      "Priority deploy queue",
+      "Everything in Hobby",
+    ],
+    maxProjects: 25,
+    maxDatabases: 25,
+    defaultMemoryBytes: 2147483648,
+    defaultCpuNano: 2_000_000_000,
+  },
+} as const;
+
+export type Plan = (typeof PLANS)[PlanId];
+
+export const SignupSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(8).max(128),
+  name: z.string().min(1).max(80),
+});
+export type SignupInput = z.infer<typeof SignupSchema>;
+
+export const LoginSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(1).max(128),
+});
+export type LoginInput = z.infer<typeof LoginSchema>;
+
+export const SelectPlanSchema = z.object({
+  plan: PlanId,
+});
+export type SelectPlanInput = z.infer<typeof SelectPlanSchema>;
+
 export const CreateProjectSchema = z.object({
   name: z
     .string()
     .min(2)
     .max(48)
     .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, "lowercase letters, numbers, hyphens"),
-  repoUrl: z.string().url(),
+  repoUrl: z
+    .string()
+    .url()
+    .or(z.literal(""))
+    .default(""),
   branch: z.string().min(1).default("main"),
   dockerfilePath: z.string().min(1).default("Dockerfile"),
   buildContext: z.string().min(1).default("."),
@@ -54,11 +120,13 @@ export const CreateProjectSchema = z.object({
   memoryLimitBytes: z.number().int().positive().optional(),
   cpuNanoCpus: z.number().int().positive().optional(),
   autoDeploy: z.boolean().default(true),
+  deployNow: z.boolean().optional(),
 });
 export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
 
 export const UpdateProjectSchema = CreateProjectSchema.partial().omit({
   name: true,
+  deployNow: true,
 });
 export type UpdateProjectInput = z.infer<typeof UpdateProjectSchema>;
 
@@ -79,8 +147,18 @@ export const TriggerDeploySchema = z.object({
 });
 export type TriggerDeployInput = z.infer<typeof TriggerDeploySchema>;
 
+export type User = {
+  id: string;
+  email: string;
+  name: string;
+  plan: PlanId;
+  onboardingCompleted: boolean;
+  createdAt: string;
+};
+
 export type Project = {
   id: string;
+  ownerId: string | null;
   name: string;
   repoUrl: string;
   branch: string;
@@ -115,6 +193,7 @@ export type Deploy = {
 
 export type ManagedDatabase = {
   id: string;
+  ownerId: string | null;
   name: string;
   kind: DatabaseKind;
   projectId: string | null;

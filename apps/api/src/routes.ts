@@ -1,12 +1,27 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   CreateDatabaseSchema,
   CreateProjectSchema,
+  LoginSchema,
+  PLANS,
+  SelectPlanSchema,
+  SignupSchema,
   TriggerDeploySchema,
   UpdateProjectSchema,
   slugHostname,
+  type PlanId,
 } from "@laptop-paas/shared";
-import { requireAdmin } from "./auth.js";
+import {
+  createSession,
+  currentUserId,
+  destroySession,
+  hashPassword,
+  mapUser,
+  ownerFilter,
+  requireAuth,
+  verifyPassword,
+  type AuthContext,
+} from "./auth.js";
 import { config } from "./config.js";
 import { query } from "./db/pool.js";
 import { mapDatabase, mapDeploy, mapProject } from "./db/mappers.js";
@@ -15,6 +30,22 @@ import { parseRepo, verifyGitHubSignature } from "./github.js";
 import { createDocker, containerLogs } from "@laptop-paas/docker";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+
+function authOf(request: FastifyRequest): AuthContext {
+  if (!request.auth) throw new Error("Missing auth context");
+  return request.auth;
+}
+
+async function getOwnedProject(auth: AuthContext, id: string) {
+  const filter = ownerFilter(auth);
+  const { rows } = filter.params.length
+    ? await query(
+        `SELECT * FROM projects WHERE id = $2 AND owner_id = $1`,
+        [filter.params[0], id],
+      )
+    : await query(`SELECT * FROM projects WHERE id = $1`, [id]);
+  return rows[0] ? mapProject(rows[0]) : null;
+}
 
 async function enqueueDeploy(
   projectId: string,
@@ -52,44 +83,175 @@ export async function registerRoutes(app: FastifyInstance) {
     publicHost: config.publicHost,
   }));
 
-  app.addHook("preHandler", async (request, reply) => {
-    const path = request.url.split("?")[0];
-    if (
-      path === "/api/health" ||
-      path === "/api/webhooks/github" ||
-      path.startsWith("/api/webhooks/")
-    ) {
-      return;
+  app.get("/api/plans", async () => ({ plans: Object.values(PLANS) }));
+
+  app.post("/api/auth/signup", async (request, reply) => {
+    const parsed = SignupSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.flatten() });
     }
-    if (path.startsWith("/api/")) {
-      return requireAdmin(request, reply);
+    const { email, password, name } = parsed.data;
+    const passwordHash = await hashPassword(password);
+    try {
+      const { rows } = await query(
+        `INSERT INTO users (email, password_hash, name, plan, onboarding_completed)
+         VALUES ($1, $2, $3, 'hobby', FALSE)
+         RETURNING id, email, name, plan, onboarding_completed, created_at`,
+        [email.toLowerCase(), passwordHash, name.trim()],
+      );
+      const user = mapUser(rows[0] as Parameters<typeof mapUser>[0]);
+      const token = await createSession(user.id);
+      return reply.code(201).send({ user, token, plans: Object.values(PLANS) });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("unique") || message.includes("duplicate")) {
+        return reply.code(409).send({ error: "An account with that email already exists" });
+      }
+      throw err;
     }
   });
 
-  app.get("/api/projects", async () => {
-    const { rows } = await query(`SELECT * FROM projects ORDER BY created_at DESC`);
+  app.post("/api/auth/login", async (request, reply) => {
+    const parsed = LoginSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.flatten() });
+    }
+    const { email, password } = parsed.data;
+    const { rows } = await query(
+      `SELECT * FROM users WHERE email = $1`,
+      [email.toLowerCase()],
+    );
+    if (!rows[0]) {
+      return reply.code(401).send({ error: "Invalid email or password" });
+    }
+    const ok = await verifyPassword(password, rows[0].password_hash as string);
+    if (!ok) {
+      return reply.code(401).send({ error: "Invalid email or password" });
+    }
+    const user = mapUser(rows[0] as Parameters<typeof mapUser>[0]);
+    const token = await createSession(user.id);
+    return { user, token };
+  });
+
+  app.post("/api/auth/logout", async (request, reply) => {
+    const header = request.headers.authorization;
+    const token =
+      header?.startsWith("Bearer ") ? header.slice(7) : (header ?? "");
+    await destroySession(token);
+    return reply.send({ ok: true });
+  });
+
+  app.addHook("preHandler", async (request, reply) => {
+    const path = request.url.split("?")[0];
+    const publicPaths = new Set([
+      "/api/health",
+      "/api/plans",
+      "/api/auth/signup",
+      "/api/auth/login",
+      "/api/auth/logout",
+      "/api/webhooks/github",
+    ]);
+    if (publicPaths.has(path) || path.startsWith("/api/webhooks/")) {
+      return;
+    }
+    if (path.startsWith("/api/")) {
+      return requireAuth(request, reply);
+    }
+  });
+
+  app.get("/api/auth/me", async (request) => {
+    const auth = authOf(request);
+    if (auth.kind === "admin") {
+      return {
+        user: {
+          id: "admin",
+          email: "admin@dockyard.local",
+          name: "Admin",
+          plan: "pro" as PlanId,
+          onboardingCompleted: true,
+          createdAt: new Date(0).toISOString(),
+        },
+        authKind: "admin",
+        plan: PLANS.pro,
+      };
+    }
+    return {
+      user: auth.user,
+      authKind: "user",
+      plan: PLANS[auth.user.plan],
+    };
+  });
+
+  app.post("/api/auth/plan", async (request, reply) => {
+    const auth = authOf(request);
+    const parsed = SelectPlanSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.flatten() });
+    }
+    if (auth.kind === "admin") {
+      return { user: { id: "admin", email: "admin@dockyard.local", name: "Admin", plan: parsed.data.plan, onboardingCompleted: true, createdAt: new Date(0).toISOString() }, plan: PLANS[parsed.data.plan] };
+    }
+    const { rows } = await query(
+      `UPDATE users SET plan = $2, onboarding_completed = TRUE WHERE id = $1
+       RETURNING id, email, name, plan, onboarding_completed, created_at`,
+      [auth.user.id, parsed.data.plan],
+    );
+    const user = mapUser(rows[0] as Parameters<typeof mapUser>[0]);
+    return { user, plan: PLANS[user.plan] };
+  });
+
+  app.get("/api/projects", async (request) => {
+    const auth = authOf(request);
+    const filter = ownerFilter(auth);
+    const { rows } = filter.params.length
+      ? await query(
+          `SELECT * FROM projects WHERE owner_id = $1 ORDER BY created_at DESC`,
+          filter.params,
+        )
+      : await query(`SELECT * FROM projects ORDER BY created_at DESC`);
     return { projects: rows.map(mapProject) };
   });
 
   app.post("/api/projects", async (request, reply) => {
+    const auth = authOf(request);
     const parsed = CreateProjectSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });
     }
     const input = parsed.data;
+    const ownerId = currentUserId(auth);
+
+    if (auth.kind === "user") {
+      const plan = PLANS[auth.user.plan];
+      const count = await query(
+        `SELECT COUNT(*)::int AS c FROM projects WHERE owner_id = $1`,
+        [auth.user.id],
+      );
+      if ((count.rows[0]?.c as number) >= plan.maxProjects) {
+        return reply.code(403).send({
+          error: `Your ${plan.name} plan allows ${plan.maxProjects} projects. Upgrade to Pro for more.`,
+        });
+      }
+    }
+
     const hostname = slugHostname(input.name, config.publicHost);
-    const memory = input.memoryLimitBytes ?? config.defaultMemory;
-    const cpu = input.cpuNanoCpus ?? config.defaultCpu;
+    const planDefaults =
+      auth.kind === "user" ? PLANS[auth.user.plan] : PLANS.pro;
+    const memory = input.memoryLimitBytes ?? planDefaults.defaultMemoryBytes;
+    const cpu = input.cpuNanoCpus ?? planDefaults.defaultCpuNano;
+    const repoUrl = input.repoUrl || "";
+
     try {
       const { rows } = await query(
         `INSERT INTO projects (
-          name, repo_url, branch, dockerfile_path, build_context, port, env,
+          owner_id, name, repo_url, branch, dockerfile_path, build_context, port, env,
           hostname, memory_limit_bytes, cpu_nano_cpus, auto_deploy
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12)
         RETURNING *`,
         [
+          ownerId,
           input.name,
-          input.repoUrl,
+          repoUrl,
           input.branch,
           input.dockerfilePath,
           input.buildContext,
@@ -103,7 +265,13 @@ export async function registerRoutes(app: FastifyInstance) {
       );
       const project = mapProject(rows[0]);
       await enqueueJob("update_proxy", {});
-      return reply.code(201).send({ project });
+
+      let deploy = null;
+      if (input.deployNow && repoUrl) {
+        deploy = await enqueueDeploy(project.id, { triggeredBy: "manual" });
+      }
+
+      return reply.code(201).send({ project, deploy });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("unique") || message.includes("duplicate")) {
@@ -114,10 +282,9 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/projects/:id", async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { rows } = await query(`SELECT * FROM projects WHERE id = $1`, [id]);
-    if (!rows[0]) return reply.code(404).send({ error: "Not found" });
-    return { project: mapProject(rows[0]) };
+    const project = await getOwnedProject(authOf(request), (request.params as { id: string }).id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
+    return { project };
   });
 
   app.patch("/api/projects/:id", async (request, reply) => {
@@ -126,9 +293,8 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });
     }
-    const existing = await query(`SELECT * FROM projects WHERE id = $1`, [id]);
-    if (!existing.rows[0]) return reply.code(404).send({ error: "Not found" });
-    const cur = mapProject(existing.rows[0]);
+    const cur = await getOwnedProject(authOf(request), id);
+    if (!cur) return reply.code(404).send({ error: "Not found" });
     const p = parsed.data;
     const { rows } = await query(
       `UPDATE projects SET
@@ -162,11 +328,9 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.delete("/api/projects/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const existing = await query(`SELECT * FROM projects WHERE id = $1`, [id]);
-    if (!existing.rows[0]) return reply.code(404).send({ error: "Not found" });
-    const project = mapProject(existing.rows[0]);
+    const project = await getOwnedProject(authOf(request), id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
 
-    // Destroy container BEFORE deleting the row
     await enqueueJob("stop", {
       projectId: id,
       containerName: `paas-app-${project.name}`,
@@ -184,11 +348,11 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });
     }
-    const { rows: projects } = await query(`SELECT * FROM projects WHERE id = $1`, [
-      id,
-    ]);
-    if (!projects[0]) return reply.code(404).send({ error: "Not found" });
-    const project = mapProject(projects[0]);
+    const project = await getOwnedProject(authOf(request), id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
+    if (!project.repoUrl) {
+      return reply.code(400).send({ error: "Add a GitHub repo URL before deploying" });
+    }
 
     if (project.status === "deploying") {
       const active = await query(
@@ -216,22 +380,24 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.post("/api/projects/:id/stop", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { rows } = await query(`SELECT * FROM projects WHERE id = $1`, [id]);
-    if (!rows[0]) return reply.code(404).send({ error: "Not found" });
+    const project = await getOwnedProject(authOf(request), id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
     await enqueueJob("stop", { projectId: id });
     return reply.code(202).send({ ok: true });
   });
 
   app.post("/api/projects/:id/restart", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { rows } = await query(`SELECT * FROM projects WHERE id = $1`, [id]);
-    if (!rows[0]) return reply.code(404).send({ error: "Not found" });
+    const project = await getOwnedProject(authOf(request), id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
     await enqueueJob("restart", { projectId: id });
     return reply.code(202).send({ ok: true });
   });
 
   app.get("/api/projects/:id/deploys", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const project = await getOwnedProject(authOf(request), id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
     const { rows } = await query(
       `SELECT * FROM deploys WHERE project_id = $1 ORDER BY created_at DESC LIMIT 50`,
       [id],
@@ -243,14 +409,16 @@ export async function registerRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { rows } = await query(`SELECT * FROM deploys WHERE id = $1`, [id]);
     if (!rows[0]) return reply.code(404).send({ error: "Not found" });
-    return { deploy: mapDeploy(rows[0]) };
+    const deploy = mapDeploy(rows[0]);
+    const project = await getOwnedProject(authOf(request), deploy.projectId);
+    if (!project) return reply.code(404).send({ error: "Not found" });
+    return { deploy };
   });
 
   app.get("/api/projects/:id/logs", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { rows } = await query(`SELECT * FROM projects WHERE id = $1`, [id]);
-    if (!rows[0]) return reply.code(404).send({ error: "Not found" });
-    const project = mapProject(rows[0]);
+    const project = await getOwnedProject(authOf(request), id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
     try {
       const docker = createDocker();
       const logs = await containerLogs(
@@ -267,17 +435,45 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/api/databases", async () => {
-    const { rows } = await query(`SELECT * FROM databases ORDER BY created_at DESC`);
+  app.get("/api/databases", async (request) => {
+    const auth = authOf(request);
+    const filter = ownerFilter(auth);
+    const { rows } = filter.params.length
+      ? await query(
+          `SELECT * FROM databases WHERE owner_id = $1 ORDER BY created_at DESC`,
+          filter.params,
+        )
+      : await query(`SELECT * FROM databases ORDER BY created_at DESC`);
     return { databases: rows.map(mapDatabase) };
   });
 
   app.post("/api/databases", async (request, reply) => {
+    const auth = authOf(request);
     const parsed = CreateDatabaseSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });
     }
     const input = parsed.data;
+    const ownerId = currentUserId(auth);
+
+    if (auth.kind === "user") {
+      const plan = PLANS[auth.user.plan];
+      const count = await query(
+        `SELECT COUNT(*)::int AS c FROM databases WHERE owner_id = $1`,
+        [auth.user.id],
+      );
+      if ((count.rows[0]?.c as number) >= plan.maxDatabases) {
+        return reply.code(403).send({
+          error: `Your ${plan.name} plan allows ${plan.maxDatabases} databases.`,
+        });
+      }
+    }
+
+    if (input.projectId) {
+      const project = await getOwnedProject(auth, input.projectId);
+      if (!project) return reply.code(404).send({ error: "Project not found" });
+    }
+
     const password = randomBytes(18).toString("base64url");
     const volumeName = `paas-db-${input.name}-data`;
     const connectionUrl =
@@ -287,10 +483,11 @@ export async function registerRoutes(app: FastifyInstance) {
 
     try {
       const { rows } = await query(
-        `INSERT INTO databases (name, kind, project_id, volume_name, connection_url, status)
-         VALUES ($1, $2, $3, $4, $5, 'provisioning')
+        `INSERT INTO databases (owner_id, name, kind, project_id, volume_name, connection_url, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'provisioning')
          RETURNING *`,
         [
+          ownerId,
           input.name,
           input.kind,
           input.projectId ?? null,
@@ -306,11 +503,8 @@ export async function registerRoutes(app: FastifyInstance) {
 
       let redeployQueued = false;
       if (input.projectId) {
-        const proj = await query(`SELECT * FROM projects WHERE id = $1`, [
-          input.projectId,
-        ]);
-        if (proj.rows[0]) {
-          const project = mapProject(proj.rows[0]);
+        const project = await getOwnedProject(auth, input.projectId);
+        if (project) {
           const env = { ...project.env };
           if (input.kind === "postgres") env.DATABASE_URL = connectionUrl;
           if (input.kind === "redis") env.REDIS_URL = connectionUrl;
@@ -318,7 +512,6 @@ export async function registerRoutes(app: FastifyInstance) {
             `UPDATE projects SET env = $2::jsonb, updated_at = NOW() WHERE id = $1`,
             [input.projectId, JSON.stringify(env)],
           );
-          // Redeploy so the running container picks up new env
           if (project.imageTag || project.status === "running") {
             await enqueueDeploy(input.projectId, {
               triggeredBy: "manual",
@@ -343,12 +536,20 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/databases/:id/link", async (request, reply) => {
+    const auth = authOf(request);
     const { id } = request.params as { id: string };
     const parsed = LinkDatabaseSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });
     }
-    const { rows } = await query(`SELECT * FROM databases WHERE id = $1`, [id]);
+
+    const filter = ownerFilter(auth);
+    const { rows } = filter.params.length
+      ? await query(`SELECT * FROM databases WHERE id = $2 AND owner_id = $1`, [
+          filter.params[0],
+          id,
+        ])
+      : await query(`SELECT * FROM databases WHERE id = $1`, [id]);
     if (!rows[0]) return reply.code(404).send({ error: "Not found" });
     const db = mapDatabase(rows[0]);
 
@@ -358,11 +559,8 @@ export async function registerRoutes(app: FastifyInstance) {
     ]);
 
     if (parsed.data.projectId) {
-      const proj = await query(`SELECT * FROM projects WHERE id = $1`, [
-        parsed.data.projectId,
-      ]);
-      if (!proj.rows[0]) return reply.code(404).send({ error: "Project not found" });
-      const project = mapProject(proj.rows[0]);
+      const project = await getOwnedProject(auth, parsed.data.projectId);
+      if (!project) return reply.code(404).send({ error: "Project not found" });
       const env = { ...project.env };
       if (db.kind === "postgres") env.DATABASE_URL = db.connectionUrl;
       if (db.kind === "redis") env.REDIS_URL = db.connectionUrl;
@@ -372,7 +570,7 @@ export async function registerRoutes(app: FastifyInstance) {
       );
       await enqueueJob("provision_database", {
         databaseId: db.id,
-        password: "", // already running; worker will reconnect network if needed
+        password: "",
         relinkOnly: true,
       });
       const deploy = await enqueueDeploy(parsed.data.projectId, {
@@ -385,8 +583,15 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.delete("/api/databases/:id", async (request, reply) => {
+    const auth = authOf(request);
     const { id } = request.params as { id: string };
-    const { rows } = await query(`SELECT * FROM databases WHERE id = $1`, [id]);
+    const filter = ownerFilter(auth);
+    const { rows } = filter.params.length
+      ? await query(`SELECT * FROM databases WHERE id = $2 AND owner_id = $1`, [
+          filter.params[0],
+          id,
+        ])
+      : await query(`SELECT * FROM databases WHERE id = $1`, [id]);
     if (!rows[0]) return reply.code(404).send({ error: "Not found" });
     const db = mapDatabase(rows[0]);
     await query(`DELETE FROM databases WHERE id = $1`, [id]);
@@ -448,6 +653,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const parsedRepo = parseRepo(cloneUrl);
     const { rows } = await query(`SELECT * FROM projects WHERE auto_deploy = TRUE`);
     const matches = rows.map(mapProject).filter((p) => {
+      if (!p.repoUrl) return false;
       if (p.branch !== branch) return false;
       const a = parseRepo(p.repoUrl);
       if (parsedRepo && a) {
@@ -465,7 +671,6 @@ export async function registerRoutes(app: FastifyInstance) {
     const deploys = [];
     for (const project of matches) {
       if (project.status === "deploying") {
-        // Skip overlapping webhook deploys; still record intent via newest only
         const active = await query(
           `SELECT id FROM deploys WHERE project_id = $1 AND status IN ('queued','building','deploying') LIMIT 1`,
           [project.id],

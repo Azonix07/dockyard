@@ -11,6 +11,7 @@ import type {
 
 type ProjectRow = {
   id: string;
+  owner_id: string | null;
   name: string;
   repo_url: string;
   branch: string;
@@ -45,6 +46,7 @@ type DeployRow = {
 
 type DbRow = {
   id: string;
+  owner_id: string | null;
   name: string;
   kind: "postgres" | "redis";
   project_id: string | null;
@@ -70,8 +72,9 @@ export function mapProject(row: ProjectRow | Record<string, unknown>): Project {
   const r = row as ProjectRow;
   return {
     id: r.id,
+    ownerId: r.owner_id ?? null,
     name: r.name,
-    repoUrl: r.repo_url,
+    repoUrl: r.repo_url ?? "",
     branch: r.branch,
     dockerfilePath: r.dockerfile_path,
     buildContext: r.build_context,
@@ -110,6 +113,7 @@ export function mapDatabase(row: DbRow | Record<string, unknown>): ManagedDataba
   const r = row as DbRow;
   return {
     id: r.id,
+    ownerId: r.owner_id ?? null,
     name: r.name,
     kind: r.kind,
     projectId: r.project_id,
