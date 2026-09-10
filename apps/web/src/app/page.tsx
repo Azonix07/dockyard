@@ -25,32 +25,50 @@ export default function HomePage() {
       <nav className="landing-nav">
         <Link href="/" className="logo">
           <span className="logo-mark" aria-hidden />
-          <span className="logo-text">Dockyard</span>
+          <span>Dockyard</span>
         </Link>
         <div className="cta-row">
           <Link href="/login" className="btn secondary">
             Log in
           </Link>
           <Link href="/signup" className="btn">
-            Start for free
+            Create account
           </Link>
         </div>
       </nav>
-      <section className="landing-hero">
-        <h1 className="brand-hero">Dockyard</h1>
-        <p>
-          Instantly deploy backends and databases on your own machine — the
-          Railway-style workflow for a cafe laptop on Tailscale.
-        </p>
-        <div className="cta-row">
-          <Link href="/signup" className="btn">
-            Create account
-          </Link>
-          <Link href="/login" className="btn secondary">
-            I already have an account
-          </Link>
-        </div>
-      </section>
+      <div className="landing-main">
+        <section className="landing-copy">
+          <div className="eyebrow">Self-hosted PaaS</div>
+          <h1>Dockyard</h1>
+          <p>
+            Ship backends and datastores on hardware you own. Push to GitHub,
+            watch metrics, and keep everything on your Tailscale network —
+            Railway/Render workflow, cafe-laptop footprint.
+          </p>
+          <div className="cta-row">
+            <Link href="/signup" className="btn">
+              Create account
+            </Link>
+            <Link href="/login" className="btn secondary">
+              Log in
+            </Link>
+          </div>
+        </section>
+        <aside className="landing-side">
+          <div className="stat-tile">
+            <div className="k">Deploy path</div>
+            <div className="v">Git → build → live</div>
+          </div>
+          <div className="stat-tile">
+            <div className="k">Datastores</div>
+            <div className="v">Postgres · Redis · MySQL · Mongo · MinIO</div>
+          </div>
+          <div className="stat-tile">
+            <div className="k">Observability</div>
+            <div className="v">CPU · memory · deploy history</div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

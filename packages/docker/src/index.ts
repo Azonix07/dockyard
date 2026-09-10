@@ -421,3 +421,80 @@ export async function imageExists(docker: Dockerode, ref: string): Promise<boole
     return false;
   }
 }
+
+export type ContainerResourceStats = {
+  cpuPercent: number;
+  memoryUsedBytes: number;
+  memoryLimitBytes: number;
+  memoryPercent: number;
+  netRxBytes: number;
+  netTxBytes: number;
+  blockReadBytes: number;
+  blockWriteBytes: number;
+};
+
+/** One-shot Docker stats sample (Railway/Render-style resource metrics). */
+export async function containerStats(
+  docker: Dockerode,
+  idOrName: string,
+): Promise<ContainerResourceStats> {
+  const stats = (await docker.getContainer(idOrName).stats({ stream: false })) as {
+    cpu_stats?: {
+      cpu_usage?: { total_usage?: number };
+      system_cpu_usage?: number;
+      online_cpus?: number;
+    };
+    precpu_stats?: {
+      cpu_usage?: { total_usage?: number };
+      system_cpu_usage?: number;
+    };
+    memory_stats?: { usage?: number; limit?: number };
+    networks?: Record<string, { rx_bytes?: number; tx_bytes?: number }>;
+    blkio_stats?: {
+      io_service_bytes_recursive?: Array<{ op?: string; value?: number }>;
+    };
+  };
+
+  const cpuDelta =
+    (stats.cpu_stats?.cpu_usage?.total_usage ?? 0) -
+    (stats.precpu_stats?.cpu_usage?.total_usage ?? 0);
+  const systemDelta =
+    (stats.cpu_stats?.system_cpu_usage ?? 0) -
+    (stats.precpu_stats?.system_cpu_usage ?? 0);
+  const online = stats.cpu_stats?.online_cpus ?? 1;
+  const cpuPercent =
+    systemDelta > 0 && cpuDelta > 0
+      ? (cpuDelta / systemDelta) * online * 100
+      : 0;
+
+  const memoryUsedBytes = stats.memory_stats?.usage ?? 0;
+  const memoryLimitBytes = stats.memory_stats?.limit ?? 0;
+  const memoryPercent =
+    memoryLimitBytes > 0 ? (memoryUsedBytes / memoryLimitBytes) * 100 : 0;
+
+  let netRxBytes = 0;
+  let netTxBytes = 0;
+  for (const n of Object.values(stats.networks ?? {})) {
+    netRxBytes += n.rx_bytes ?? 0;
+    netTxBytes += n.tx_bytes ?? 0;
+  }
+
+  let blockReadBytes = 0;
+  let blockWriteBytes = 0;
+  for (const row of stats.blkio_stats?.io_service_bytes_recursive ?? []) {
+    const op = (row.op ?? "").toLowerCase();
+    if (op === "read") blockReadBytes += row.value ?? 0;
+    if (op === "write") blockWriteBytes += row.value ?? 0;
+  }
+
+  return {
+    cpuPercent: Math.round(cpuPercent * 100) / 100,
+    memoryUsedBytes,
+    memoryLimitBytes,
+    memoryPercent: Math.round(memoryPercent * 100) / 100,
+    netRxBytes,
+    netTxBytes,
+    blockReadBytes,
+    blockWriteBytes,
+  };
+}

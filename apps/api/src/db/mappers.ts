@@ -48,12 +48,13 @@ type DbRow = {
   id: string;
   owner_id: string | null;
   name: string;
-  kind: "postgres" | "redis";
+  kind: ManagedDatabase["kind"];
   project_id: string | null;
   container_id: string | null;
   volume_name: string;
   connection_url: string;
   status: ManagedDatabase["status"];
+  config?: ManagedDatabase["config"] | null;
   created_at: Date;
 };
 
@@ -121,6 +122,7 @@ export function mapDatabase(row: DbRow | Record<string, unknown>): ManagedDataba
     volumeName: r.volume_name,
     connectionUrl: r.connection_url,
     status: r.status,
+    config: r.config ?? {},
     createdAt: r.created_at.toISOString(),
   };
 }

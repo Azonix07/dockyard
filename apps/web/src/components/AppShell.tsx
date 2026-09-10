@@ -22,27 +22,32 @@ export function AppShell({
     router.replace("/login");
   }
 
+  const link = (href: string, label: string) => {
+    const active =
+      href === "/dashboard"
+        ? pathname.startsWith("/dashboard") ||
+          pathname.startsWith("/project") ||
+          pathname.startsWith("/new")
+        : pathname.startsWith(href);
+    return (
+      <Link href={href} className={active ? "nav-link active" : "nav-link"}>
+        {label}
+      </Link>
+    );
+  };
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
           <Link href="/dashboard" className="logo">
             <span className="logo-mark" aria-hidden />
-            <span className="logo-text">Dockyard</span>
+            <span>Dockyard</span>
           </Link>
           <nav className="nav">
-            <Link
-              href="/dashboard"
-              className={pathname.startsWith("/dashboard") || pathname.startsWith("/project") || pathname.startsWith("/new") ? "nav-link active" : "nav-link"}
-            >
-              Projects
-            </Link>
-            <Link
-              href="/databases"
-              className={pathname.startsWith("/databases") ? "nav-link active" : "nav-link"}
-            >
-              Databases
-            </Link>
+            {link("/dashboard", "Projects")}
+            {link("/databases", "Databases")}
+            {link("/usage", "Usage")}
           </nav>
         </div>
         <div className="topbar-right">
@@ -66,4 +71,13 @@ export function AppShell({
 
 export function StatusBadge({ status }: { status: string }) {
   return <span className={`status-badge ${status}`}>{status}</span>;
+}
+
+export function Meter({ value, max = 100 }: { value: number; max?: number }) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  return (
+    <div className="meter" aria-hidden>
+      <span style={{ width: `${pct}%` }} />
+    </div>
+  );
 }

@@ -60,79 +60,89 @@ export default function LoginPage() {
 
   return (
     <div className="auth-wrap">
-      <div className="auth-card">
-        <Link href="/" className="logo" style={{ marginBottom: 18 }}>
+      <aside className="auth-brand">
+        <Link href="/" className="logo">
           <span className="logo-mark" aria-hidden />
-          <span className="logo-text">Dockyard</span>
+          <span>Dockyard</span>
         </Link>
-        <h1>Welcome back</h1>
-        <p className="sub">Log in with your Dockyard email.</p>
-        <form onSubmit={(e) => void onSubmit(e)}>
-          <label className="field">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-            />
-          </label>
-          <label className="field">
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </label>
-          <label className="field">
-            API URL <span className="muted">(optional)</span>
-            <input
-              value={apiBase}
-              onChange={(e) => setApiBase(e.target.value)}
-              placeholder={getApiUrl()}
-            />
-          </label>
-          {error ? <p className="error">{error}</p> : null}
-          <button className="btn" type="submit" disabled={busy}>
-            {busy ? "Signing in…" : "Log in"}
-          </button>
-        </form>
-        <p className="auth-footer">
-          New here? <Link href="/signup">Create an account</Link>
-          {" · "}
-          <button
-            type="button"
-            className="btn ghost"
-            style={{ display: "inline", padding: 0 }}
-            onClick={() => setShowAdmin((v) => !v)}
-          >
-            Admin token
-          </button>
-        </p>
-        {showAdmin ? (
-          <form
-            onSubmit={(e) => void onAdmin(e)}
-            style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}
-          >
+        <div>
+          <div className="muted mono" style={{ fontSize: "0.75rem" }}>
+            WELCOME BACK
+          </div>
+          <h1>Pick up where you left off.</h1>
+        </div>
+        <p className="muted">Projects, databases, and live metrics on this host.</p>
+      </aside>
+      <div className="auth-panel">
+        <div className="auth-card">
+          <h1>Log in</h1>
+          <p className="sub">Sign in with your Dockyard email.</p>
+          <form onSubmit={(e) => void onSubmit(e)}>
             <label className="field">
-              ADMIN_TOKEN
+              Email
               <input
-                type="password"
-                value={adminToken}
-                onChange={(e) => setAdminToken(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </label>
-            <button className="btn secondary" type="submit" disabled={busy}>
-              Enter as admin
+            <label className="field">
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </label>
+            <label className="field">
+              API URL <span className="muted">(optional)</span>
+              <input
+                value={apiBase}
+                onChange={(e) => setApiBase(e.target.value)}
+                placeholder={getApiUrl()}
+              />
+            </label>
+            {error ? <p className="error">{error}</p> : null}
+            <button className="btn" type="submit" disabled={busy}>
+              {busy ? "Signing in…" : "Log in"}
             </button>
           </form>
-        ) : null}
+          <p className="auth-footer">
+            New here? <Link href="/signup">Create an account</Link>
+            {" · "}
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ display: "inline", padding: 0 }}
+              onClick={() => setShowAdmin((v) => !v)}
+            >
+              Admin token
+            </button>
+          </p>
+          {showAdmin ? (
+            <form
+              onSubmit={(e) => void onAdmin(e)}
+              style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              <label className="field">
+                ADMIN_TOKEN
+                <input
+                  type="password"
+                  value={adminToken}
+                  onChange={(e) => setAdminToken(e.target.value)}
+                  required
+                />
+              </label>
+              <button className="btn secondary" type="submit" disabled={busy}>
+                Enter as admin
+              </button>
+            </form>
+          ) : null}
+        </div>
       </div>
     </div>
   );

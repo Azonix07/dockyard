@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS databases (
   volume_name TEXT NOT NULL,
   connection_url TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'provisioning',
+  config JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -96,5 +97,10 @@ END $$;
 
 DO $$ BEGIN
   ALTER TABLE projects ALTER COLUMN repo_url SET DEFAULT '';
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE databases ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::jsonb;
 EXCEPTION WHEN others THEN NULL;
 END $$;

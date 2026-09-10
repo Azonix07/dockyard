@@ -513,6 +513,14 @@ async function handleProvisionDatabase(job: JobRow) {
     volume_name: string;
     connection_url: string;
     status: string;
+    config: {
+      version?: string;
+      memoryMb?: number;
+      cpu?: number;
+      image?: string;
+      volumePath?: string;
+      port?: number;
+    } | null;
   }>(`SELECT * FROM databases WHERE id = $1`, [databaseId]);
   const db = rows[0];
   if (!db) throw new Error("Database not found");
@@ -541,42 +549,93 @@ async function handleProvisionDatabase(job: JobRow) {
   await ensureVolume(docker, db.volume_name);
   await removeContainerIfExists(docker, containerName);
 
-  if (db.kind === "postgres") {
-    await pullImage(docker, "postgres:16-alpine", (l) =>
-      console.log("[pull postgres]", l),
-    );
-    await runContainer(docker, {
-      name: containerName,
-      image: "postgres:16-alpine",
-      env: {
-        POSTGRES_USER: "paas",
-        POSTGRES_PASSWORD: password,
-        POSTGRES_DB: "paas",
-      },
-      network,
-      port: 5432,
-      memoryLimitBytes: 512 * 1024 * 1024,
-      cpuNanoCpus: 500_000_000,
-      volumes: [{ name: db.volume_name, containerPath: "/var/lib/postgresql/data" }],
-      labels: { "laptop-paas.db": db.name },
-    });
-  } else {
-    await pullImage(docker, "redis:7-alpine", (l) =>
-      console.log("[pull redis]", l),
-    );
-    await runContainer(docker, {
-      name: containerName,
-      image: "redis:7-alpine",
-      env: {},
-      network,
-      port: 6379,
-      memoryLimitBytes: 256 * 1024 * 1024,
-      cpuNanoCpus: 250_000_000,
-      volumes: [{ name: db.volume_name, containerPath: "/data" }],
-      cmd: ["redis-server", "--requirepass", password],
-      labels: { "laptop-paas.db": db.name },
-    });
+  const cfg = db.config ?? {};
+  const kind = db.kind;
+  const version = cfg.version ?? "16";
+  const memoryLimitBytes = Math.round((cfg.memoryMb ?? 512) * 1024 * 1024);
+  const cpuNanoCpus = Math.round((cfg.cpu ?? 0.5) * 1_000_000_000);
+  const image =
+    cfg.image ??
+    ({
+      postgres: `postgres:${version}-alpine`,
+      mysql: `mysql:${version}`,
+      mariadb: `mariadb:${version}`,
+      redis: `redis:${version}-alpine`,
+      mongodb: `mongo:${version}`,
+      minio: "minio/minio:latest",
+    } as Record<string, string>)[kind] ??
+    `postgres:${version}-alpine`;
+
+  await pullImage(docker, image, (l) => console.log(`[pull ${kind}]`, l));
+
+  const volumePath =
+    cfg.volumePath ??
+    ({
+      postgres: "/var/lib/postgresql/data",
+      mysql: "/var/lib/mysql",
+      mariadb: "/var/lib/mysql",
+      redis: "/data",
+      mongodb: "/data/db",
+      minio: "/data",
+    } as Record<string, string>)[kind] ??
+    "/data";
+
+  const port =
+    cfg.port ??
+    ({
+      postgres: 5432,
+      mysql: 3306,
+      mariadb: 3306,
+      redis: 6379,
+      mongodb: 27017,
+      minio: 9000,
+    } as Record<string, number>)[kind] ??
+    5432;
+
+  let env: Record<string, string> = {};
+  let cmd: string[] | undefined;
+
+  if (kind === "postgres") {
+    env = {
+      POSTGRES_USER: "paas",
+      POSTGRES_PASSWORD: password,
+      POSTGRES_DB: "paas",
+    };
+  } else if (kind === "mysql" || kind === "mariadb") {
+    env = {
+      MYSQL_ROOT_PASSWORD: password,
+      MYSQL_DATABASE: "paas",
+      MYSQL_USER: "paas",
+      MYSQL_PASSWORD: password,
+    };
+  } else if (kind === "redis") {
+    cmd = ["redis-server", "--requirepass", password];
+  } else if (kind === "mongodb") {
+    env = {
+      MONGO_INITDB_ROOT_USERNAME: "paas",
+      MONGO_INITDB_ROOT_PASSWORD: password,
+      MONGO_INITDB_DATABASE: "paas",
+    };
+  } else if (kind === "minio") {
+    env = {
+      MINIO_ROOT_USER: "paas",
+      MINIO_ROOT_PASSWORD: password,
+    };
+    cmd = ["server", "/data", "--console-address", ":9001"];
   }
+
+  await runContainer(docker, {
+    name: containerName,
+    image,
+    env,
+    network,
+    port,
+    memoryLimitBytes,
+    cpuNanoCpus,
+    volumes: [{ name: db.volume_name, containerPath: volumePath }],
+    cmd,
+    labels: { "laptop-paas.db": db.name, "laptop-paas.kind": kind },
+  });
 
   const info = await docker.getContainer(containerName).inspect();
   await pool.query(

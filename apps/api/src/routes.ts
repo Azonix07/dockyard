@@ -2,14 +2,19 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   CreateDatabaseSchema,
   CreateProjectSchema,
+  DATABASE_PRESETS,
   LoginSchema,
   PLANS,
   SelectPlanSchema,
   SignupSchema,
   TriggerDeploySchema,
   UpdateProjectSchema,
+  buildDatabaseConnectionUrl,
+  databaseImage,
   slugHostname,
   type PlanId,
+  type ResourceMetrics,
+  type UsageSummary,
 } from "@laptop-paas/shared";
 import {
   createSession,
@@ -27,7 +32,7 @@ import { query } from "./db/pool.js";
 import { mapDatabase, mapDeploy, mapProject } from "./db/mappers.js";
 import { enqueueJob } from "./jobs.js";
 import { parseRepo, verifyGitHubSignature } from "./github.js";
-import { createDocker, containerLogs } from "@laptop-paas/docker";
+import { containerLogs, containerStats, createDocker } from "@laptop-paas/docker";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
@@ -84,6 +89,10 @@ export async function registerRoutes(app: FastifyInstance) {
   }));
 
   app.get("/api/plans", async () => ({ plans: Object.values(PLANS) }));
+
+  app.get("/api/database-presets", async () => ({
+    presets: Object.values(DATABASE_PRESETS),
+  }));
 
   app.post("/api/auth/signup", async (request, reply) => {
     const parsed = SignupSchema.safeParse(request.body);
@@ -146,6 +155,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const publicPaths = new Set([
       "/api/health",
       "/api/plans",
+      "/api/database-presets",
       "/api/auth/signup",
       "/api/auth/login",
       "/api/auth/logout",
@@ -447,6 +457,166 @@ export async function registerRoutes(app: FastifyInstance) {
     return { databases: rows.map(mapDatabase) };
   });
 
+  app.get("/api/usage", async (request) => {
+    const auth = authOf(request);
+    const plan =
+      auth.kind === "user" ? PLANS[auth.user.plan] : PLANS.pro;
+    const ownerId = currentUserId(auth);
+
+    const projectQ = ownerId
+      ? await query(
+          `SELECT COUNT(*)::int AS c,
+                  COALESCE(SUM(memory_limit_bytes),0)::bigint AS mem,
+                  COALESCE(SUM(cpu_nano_cpus),0)::bigint AS cpu,
+                  COUNT(*) FILTER (WHERE status = 'running')::int AS running
+           FROM projects WHERE owner_id = $1`,
+          [ownerId],
+        )
+      : await query(
+          `SELECT COUNT(*)::int AS c,
+                  COALESCE(SUM(memory_limit_bytes),0)::bigint AS mem,
+                  COALESCE(SUM(cpu_nano_cpus),0)::bigint AS cpu,
+                  COUNT(*) FILTER (WHERE status = 'running')::int AS running
+           FROM projects`,
+        );
+
+    const dbQ = ownerId
+      ? await query(
+          `SELECT COUNT(*)::int AS c FROM databases WHERE owner_id = $1`,
+          [ownerId],
+        )
+      : await query(`SELECT COUNT(*)::int AS c FROM databases`);
+
+    const deployQ = ownerId
+      ? await query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE d.status = 'failed')::int AS failed
+           FROM deploys d
+           JOIN projects p ON p.id = d.project_id
+           WHERE p.owner_id = $1 AND d.created_at > NOW() - INTERVAL '24 hours'`,
+          [ownerId],
+        )
+      : await query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
+           FROM deploys WHERE created_at > NOW() - INTERVAL '24 hours'`,
+        );
+
+    const recentQ = ownerId
+      ? await query(
+          `SELECT d.id, p.name AS project_name, d.status, d.triggered_by, d.created_at
+           FROM deploys d
+           JOIN projects p ON p.id = d.project_id
+           WHERE p.owner_id = $1
+           ORDER BY d.created_at DESC LIMIT 12`,
+          [ownerId],
+        )
+      : await query(
+          `SELECT d.id, p.name AS project_name, d.status, d.triggered_by, d.created_at
+           FROM deploys d
+           JOIN projects p ON p.id = d.project_id
+           ORDER BY d.created_at DESC LIMIT 12`,
+        );
+
+    const usage: UsageSummary = {
+      plan,
+      projectsUsed: Number(projectQ.rows[0]?.c ?? 0),
+      projectsLimit: plan.maxProjects,
+      databasesUsed: Number(dbQ.rows[0]?.c ?? 0),
+      databasesLimit: plan.maxDatabases,
+      reservedMemoryBytes: Number(projectQ.rows[0]?.mem ?? 0),
+      reservedCpuNano: Number(projectQ.rows[0]?.cpu ?? 0),
+      runningServices: Number(projectQ.rows[0]?.running ?? 0),
+      deploysLast24h: Number(deployQ.rows[0]?.total ?? 0),
+      failedDeploysLast24h: Number(deployQ.rows[0]?.failed ?? 0),
+      recentDeploys: recentQ.rows.map((r) => ({
+        id: r.id as string,
+        projectName: r.project_name as string,
+        status: r.status as UsageSummary["recentDeploys"][number]["status"],
+        triggeredBy: r.triggered_by as string,
+        createdAt: (r.created_at as Date).toISOString(),
+      })),
+    };
+    return { usage };
+  });
+
+  async function metricsForContainer(
+    containerId: string | null,
+    fallbackName: string,
+  ): Promise<ResourceMetrics> {
+    const sampledAt = new Date().toISOString();
+    try {
+      const docker = createDocker();
+      const stats = await containerStats(
+        docker,
+        containerId ?? fallbackName,
+      );
+      return {
+        available: true,
+        cpuPercent: stats.cpuPercent,
+        memoryUsedBytes: stats.memoryUsedBytes,
+        memoryLimitBytes: stats.memoryLimitBytes,
+        memoryPercent: stats.memoryPercent,
+        netRxBytes: stats.netRxBytes,
+        netTxBytes: stats.netTxBytes,
+        blockReadBytes: stats.blockReadBytes,
+        blockWriteBytes: stats.blockWriteBytes,
+        sampledAt,
+      };
+    } catch {
+      return {
+        available: false,
+        cpuPercent: null,
+        memoryUsedBytes: null,
+        memoryLimitBytes: null,
+        memoryPercent: null,
+        netRxBytes: null,
+        netTxBytes: null,
+        blockReadBytes: null,
+        blockWriteBytes: null,
+        sampledAt,
+      };
+    }
+  }
+
+  app.get("/api/projects/:id/metrics", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const project = await getOwnedProject(authOf(request), id);
+    if (!project) return reply.code(404).send({ error: "Not found" });
+    const metrics = await metricsForContainer(
+      project.containerId,
+      `paas-app-${project.name}`,
+    );
+    return {
+      metrics,
+      limits: {
+        memoryLimitBytes: project.memoryLimitBytes,
+        cpuNanoCpus: project.cpuNanoCpus,
+      },
+    };
+  });
+
+  app.get("/api/databases/:id/metrics", async (request, reply) => {
+    const auth = authOf(request);
+    const { id } = request.params as { id: string };
+    const filter = ownerFilter(auth);
+    const { rows } = filter.params.length
+      ? await query(`SELECT * FROM databases WHERE id = $2 AND owner_id = $1`, [
+          filter.params[0],
+          id,
+        ])
+      : await query(`SELECT * FROM databases WHERE id = $1`, [id]);
+    if (!rows[0]) return reply.code(404).send({ error: "Not found" });
+    const db = mapDatabase(rows[0]);
+    const metrics = await metricsForContainer(
+      db.containerId,
+      `paas-db-${db.name}`,
+    );
+    return { metrics, database: db };
+  });
+
   app.post("/api/databases", async (request, reply) => {
     const auth = authOf(request);
     const parsed = CreateDatabaseSchema.safeParse(request.body);
@@ -455,6 +625,10 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     const input = parsed.data;
     const ownerId = currentUserId(auth);
+    const preset = DATABASE_PRESETS[input.kind];
+    const version = input.version ?? preset.defaultVersion;
+    const memoryMb = input.memoryMb ?? preset.defaultMemoryMb;
+    const cpu = input.cpu ?? preset.defaultCpu;
 
     if (auth.kind === "user") {
       const plan = PLANS[auth.user.plan];
@@ -476,15 +650,26 @@ export async function registerRoutes(app: FastifyInstance) {
 
     const password = randomBytes(18).toString("base64url");
     const volumeName = `paas-db-${input.name}-data`;
-    const connectionUrl =
-      input.kind === "postgres"
-        ? `postgres://paas:${password}@paas-db-${input.name}:5432/paas`
-        : `redis://:${password}@paas-db-${input.name}:6379`;
+    const { connectionUrl, injectEnv } = buildDatabaseConnectionUrl({
+      kind: input.kind,
+      name: input.name,
+      password,
+      version,
+    });
+    const dbConfig = {
+      version,
+      memoryMb,
+      cpu,
+      image: databaseImage(input.kind, version),
+      volumePath: preset.volumePath,
+      port: preset.port,
+      engine: preset.engine,
+    };
 
     try {
       const { rows } = await query(
-        `INSERT INTO databases (owner_id, name, kind, project_id, volume_name, connection_url, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'provisioning')
+        `INSERT INTO databases (owner_id, name, kind, project_id, volume_name, connection_url, status, config)
+         VALUES ($1, $2, $3, $4, $5, $6, 'provisioning', $7::jsonb)
          RETURNING *`,
         [
           ownerId,
@@ -493,6 +678,7 @@ export async function registerRoutes(app: FastifyInstance) {
           input.projectId ?? null,
           volumeName,
           connectionUrl,
+          JSON.stringify(dbConfig),
         ],
       );
       const database = mapDatabase(rows[0]);
@@ -505,9 +691,7 @@ export async function registerRoutes(app: FastifyInstance) {
       if (input.projectId) {
         const project = await getOwnedProject(auth, input.projectId);
         if (project) {
-          const env = { ...project.env };
-          if (input.kind === "postgres") env.DATABASE_URL = connectionUrl;
-          if (input.kind === "redis") env.REDIS_URL = connectionUrl;
+          const env = { ...project.env, ...injectEnv };
           await query(
             `UPDATE projects SET env = $2::jsonb, updated_at = NOW() WHERE id = $1`,
             [input.projectId, JSON.stringify(env)],
@@ -562,8 +746,19 @@ export async function registerRoutes(app: FastifyInstance) {
       const project = await getOwnedProject(auth, parsed.data.projectId);
       if (!project) return reply.code(404).send({ error: "Project not found" });
       const env = { ...project.env };
-      if (db.kind === "postgres") env.DATABASE_URL = db.connectionUrl;
-      if (db.kind === "redis") env.REDIS_URL = db.connectionUrl;
+      const preset = DATABASE_PRESETS[db.kind];
+      if (preset) {
+        if (db.kind === "mongodb") {
+          env.MONGO_URL = db.connectionUrl;
+          env.MONGODB_URI = db.connectionUrl;
+        } else if (db.kind === "minio") {
+          env.S3_ENDPOINT = db.connectionUrl;
+        } else if (db.kind === "redis") {
+          env.REDIS_URL = db.connectionUrl;
+        } else {
+          env.DATABASE_URL = db.connectionUrl;
+        }
+      }
       await query(
         `UPDATE projects SET env = $2::jsonb, updated_at = NOW() WHERE id = $1`,
         [parsed.data.projectId, JSON.stringify(env)],
