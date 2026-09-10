@@ -13,7 +13,8 @@ Usage:
   ./scripts/cafe.sh              # open interactive SSH shell
   ./scripts/cafe.sh status       # ping + check Dockyard ports
   ./scripts/cafe.sh wsl          # open WSL Ubuntu shell on cafe PC
-  ./scripts/cafe.sh up           # git pull + start/restart Dockyard
+  ./scripts/cafe.sh up           # git pull + force rebuild web + restart
+  ./scripts/cafe.sh force-deploy # nuclear: clean pull + no-cache web rebuild
   ./scripts/cafe.sh logs         # show api/web/worker logs
   ./scripts/cafe.sh 'dir'        # run arbitrary remote command
 EOF
@@ -43,14 +44,19 @@ case "$CMD" in
     ;;
   up )
     echo "Syncing cafe Dockyard to origin/main…"
-    ssh cafe "wsl -d Ubuntu -- bash -lc 'cd /home/abhin/dockyard && git fetch origin && git reset --hard origin/main'"
-    echo "Rebuilding and restarting stack…"
-    ssh cafe "wsl -d Ubuntu -- bash /home/abhin/dockyard/infra/up.sh"
+    ssh cafe "wsl -d Ubuntu -- bash -lc 'cd /home/abhin/dockyard && git fetch origin && git checkout -B main origin/main && git reset --hard origin/main && git clean -fd && echo SHA=\$(git rev-parse --short HEAD) && test -f apps/web/src/app/signup/page.tsx && echo HAS_SIGNUP=yes'"
+    echo "Force-rebuilding web (no cache) + restarting stack…"
+    ssh cafe "wsl -d Ubuntu -- bash -lc 'cd /home/abhin/dockyard && docker compose -f infra/docker-compose.yml build --no-cache web && docker compose -f infra/docker-compose.yml up -d --build --force-recreate'"
     echo
-    echo "Checking signup route…"
-    sleep 2
-    code=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "http://${CAFE_HOST}:${WEB_PORT}/signup" || echo "000")
-    echo "http://${CAFE_HOST}:${WEB_PORT}/signup → HTTP ${code}"
+    echo "Checking routes…"
+    sleep 4
+    for path in / /signup /login; do
+      code=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "http://${CAFE_HOST}:${WEB_PORT}${path}" || echo "000")
+      echo "http://${CAFE_HOST}:${WEB_PORT}${path} → HTTP ${code}"
+    done
+    ;;
+  force-deploy )
+    exec "$(cd "$(dirname "$0")" && pwd)/cafe-force-deploy.sh"
     ;;
   logs )
     ssh cafe "wsl -d Ubuntu -- docker compose -f /home/abhin/dockyard/infra/docker-compose.yml logs --tail=80 api web worker"
