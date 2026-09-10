@@ -5,12 +5,15 @@ function resolveApiUrl(): string {
   }
   const env = process.env.NEXT_PUBLIC_API_URL;
   if (env && env.trim()) return env.replace(/\/$/, "");
-  // Same-host default: API on :8080 when UI is on :3000
+  // Same-host default: API on :8180 (Dockyard host mapping)
   if (typeof window !== "undefined") {
     const { protocol, hostname } = window.location;
-    return `${protocol}//${hostname}:8080`;
+    if (window.location.port === "3100" || window.location.port === "") {
+      return `${protocol}//${hostname}:8180`;
+    }
+    return `${protocol}//${hostname}:8180`;
   }
-  return "http://localhost:8080";
+  return "http://localhost:8180";
 }
 
 function token(): string {

@@ -28,14 +28,15 @@ services:
       DATA_DIR: /var/lib/laptop-paas
       CADDYFILE_PATH: /etc/caddy/dynamic/Caddyfile
       DOCKER_HOST: unix:///var/run/docker.sock
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3100}
       CADDY_ADMIN_URL: http://caddy:2019
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - paas_data:/var/lib/laptop-paas
       - caddy_dynamic:/etc/caddy/dynamic
     ports:
-      - "8080:8080"
+      # 8180 avoids conflict with other apps on cafe PC (e.g. Gamespot on 8080)
+      - "8180:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,10 +75,11 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     environment:
-      # Runtime hint only; browser resolves API via same hostname:8080 by default
+      # Runtime hint; browser defaults to same host :8180 if empty
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     ports:
-      - "3000:3000"
+      # 3100 avoids conflict with other apps on cafe PC (e.g. Gamespot on 3000)
+      - "3100:3000"
     depends_on:
       - api
     networks:

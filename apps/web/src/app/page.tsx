@@ -288,7 +288,7 @@ export default function HomePage() {
             <input
               value={apiBase}
               onChange={(e) => setApiBase(e.target.value)}
-              placeholder="http://windows-laptop:8080"
+              placeholder="http://abhinand:8180"
             />
           </label>
           <label style={{ marginTop: 10 }}>
