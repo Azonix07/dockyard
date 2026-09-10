@@ -1,0 +1,19 @@
+{
+  "name": "laptop-paas",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @laptop-paas/shared && npm run build -w @laptop-paas/docker && npm run build -w @laptop-paas/api && npm run build -w @laptop-paas/worker && npm run build -w @laptop-paas/web",
+    "dev:api": "npm run dev -w @laptop-paas/api",
+    "dev:worker": "npm run dev -w @laptop-paas/worker",
+    "dev:web": "npm run dev -w @laptop-paas/web",
+    "db:migrate": "npm run db:migrate -w @laptop-paas/api",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

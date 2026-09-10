@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: paas
+      POSTGRES_PASSWORD: paas
+      POSTGRES_DB: paas
+    volumes:
+      - paas_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paas -d paas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - paas
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://paas:paas@postgres:5432/paas
+      PORT: "8080"
+      DATA_DIR: /var/lib/laptop-paas
+      CADDYFILE_PATH: /etc/caddy/dynamic/Caddyfile
+      DOCKER_HOST: unix:///var/run/docker.sock
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      CADDY_ADMIN_URL: http://caddy:2019
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - paas_data:/var/lib/laptop-paas
+      - caddy_dynamic:/etc/caddy/dynamic
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - paas
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://paas:paas@postgres:5432/paas
+      DATA_DIR: /var/lib/laptop-paas
+      CADDYFILE_PATH: /etc/caddy/dynamic/Caddyfile
+      DOCKER_HOST: unix:///var/run/docker.sock
+      CADDY_ADMIN_URL: http://caddy:2019
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - paas_data:/var/lib/laptop-paas
+      - caddy_dynamic:/etc/caddy/dynamic
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    networks:
+      - paas
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    environment:
+      # Runtime hint only; browser resolves API via same hostname:8080 by default
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - paas
+
+  caddy:
+    image: caddy:2.9-alpine
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ ! -f /etc/caddy/dynamic/Caddyfile ]; then
+          cp /init/Caddyfile.initial /etc/caddy/dynamic/Caddyfile
+        fi
+        exec caddy run --config /etc/caddy/dynamic/Caddyfile --adapter caddyfile --watch
+    volumes:
+      - caddy_dynamic:/etc/caddy/dynamic
+      - ./Caddyfile.initial:/init/Caddyfile.initial:ro
+    ports:
+      - "80:80"
+    expose:
+      - "2019"
+    networks:
+      - paas
+
+volumes:
+  paas_pg:
+  paas_data:
+  caddy_dynamic:
+
+networks:
+  paas:
+    name: laptop-paas
+    driver: bridge
