@@ -42,7 +42,15 @@ case "$CMD" in
     exec ssh cafe "wsl -d Ubuntu -e bash -l"
     ;;
   up )
+    echo "Syncing cafe Dockyard to origin/main…"
+    ssh cafe "wsl -d Ubuntu -- bash -lc 'cd /home/abhin/dockyard && git fetch origin && git reset --hard origin/main'"
+    echo "Rebuilding and restarting stack…"
     ssh cafe "wsl -d Ubuntu -- bash /home/abhin/dockyard/infra/up.sh"
+    echo
+    echo "Checking signup route…"
+    sleep 2
+    code=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "http://${CAFE_HOST}:${WEB_PORT}/signup" || echo "000")
+    echo "http://${CAFE_HOST}:${WEB_PORT}/signup → HTTP ${code}"
     ;;
   logs )
     ssh cafe "wsl -d Ubuntu -- docker compose -f /home/abhin/dockyard/infra/docker-compose.yml logs --tail=80 api web worker"
