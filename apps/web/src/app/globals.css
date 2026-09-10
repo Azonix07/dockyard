@@ -397,7 +397,7 @@ h3 {
 .page-head {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: flex-end;
   gap: 16px;
   padding: 26px 24px 10px;
 }
