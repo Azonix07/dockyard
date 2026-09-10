@@ -20,7 +20,10 @@ ARG NEXT_PUBLIC_API_URL=
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build -w @laptop-paas/shared && npm run build -w @laptop-paas/web \
   && echo "standalone tree:" \
-  && find apps/web/.next/standalone -maxdepth 3 -type f -name 'server.js' -o -name 'package.json' | head -40
+  && find apps/web/.next/standalone -maxdepth 3 -type f -name 'server.js' -o -name 'package.json' | head -40 \
+  && test -d apps/web/.next/standalone/apps/web/.next/server/app/signup \
+  && test -f apps/web/.next/server/app/signup.html \
+  && echo "OK: /signup present in standalone build"
 
 FROM node:22-bookworm-slim
 WORKDIR /app
