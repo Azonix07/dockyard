@@ -16,6 +16,7 @@ import { api, clearToken, getToken, setToken } from "@/lib/api";
 type AuthState = {
   user: User | null;
   plan: Plan | null;
+  authKind: "user" | "admin" | null;
   loading: boolean;
   refresh: () => Promise<User | null>;
   loginWithToken: (token: string) => Promise<User>;
@@ -27,25 +28,33 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [authKind, setAuthKind] = useState<"user" | "admin" | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!getToken()) {
       setUser(null);
       setPlan(null);
+      setAuthKind(null);
       setLoading(false);
       return null;
     }
     try {
-      const res = await api<{ user: User; plan: Plan }>("/api/auth/me");
+      const res = await api<{
+        user: User;
+        plan: Plan;
+        authKind?: "user" | "admin";
+      }>("/api/auth/me");
       setUser(res.user);
       setPlan(res.plan);
+      setAuthKind(res.authKind ?? (res.user.id === "admin" ? "admin" : "user"));
       setLoading(false);
       return res.user;
     } catch {
       clearToken();
       setUser(null);
       setPlan(null);
+      setAuthKind(null);
       setLoading(false);
       return null;
     }
@@ -74,11 +83,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearToken();
     setUser(null);
     setPlan(null);
+    setAuthKind(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, plan, loading, refresh, loginWithToken, logout }),
-    [user, plan, loading, refresh, loginWithToken, logout],
+    () => ({
+      user,
+      plan,
+      authKind,
+      loading,
+      refresh,
+      loginWithToken,
+      logout,
+    }),
+    [user, plan, authKind, loading, refresh, loginWithToken, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -103,11 +121,30 @@ export function useRequireAuth(opts?: { requireOnboarding?: boolean }) {
     if (
       opts?.requireOnboarding !== false &&
       !auth.user.onboardingCompleted &&
-      auth.user.id !== "admin"
+      auth.user.id !== "admin" &&
+      auth.authKind !== "admin"
     ) {
       router.replace("/onboarding/plan");
     }
-  }, [auth.loading, auth.user, opts?.requireOnboarding, router]);
+  }, [auth.loading, auth.user, auth.authKind, opts?.requireOnboarding, router]);
+
+  return auth;
+}
+
+export function useRequireAdmin() {
+  const auth = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (auth.loading) return;
+    if (!auth.user) {
+      router.replace("/login");
+      return;
+    }
+    if (auth.authKind !== "admin" && auth.user.id !== "admin") {
+      router.replace("/dashboard");
+    }
+  }, [auth.loading, auth.user, auth.authKind, router]);
 
   return auth;
 }

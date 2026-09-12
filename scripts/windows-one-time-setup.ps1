@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 <#
-  Dockyard — one-time Windows setup for remote Mac access over Tailscale.
+  Runbase — one-time Windows setup for remote Mac access over Tailscale.
 #>
 
 $ErrorActionPreference = "Continue"
@@ -115,6 +115,6 @@ Write-Host ""
 Write-Host "SSH key installed for $UserName." -ForegroundColor Green
 Write-Host "From your Mac later: ssh cafe" -ForegroundColor Green
 Write-Host ""
-Write-Host "NEXT on this PC: open Ubuntu and install Dockyard." -ForegroundColor Yellow
+Write-Host "NEXT on this PC: open Ubuntu and install Runbase." -ForegroundColor Yellow
 Write-Host "Opening power settings..." -ForegroundColor Cyan
 Start-Process "ms-settings:powersleep"

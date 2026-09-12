@@ -114,14 +114,6 @@ export async function resolveAuth(
   return { kind: "user", user: mapUser(rows[0] as UserRow), token };
 }
 
-/** Legacy alias used by older imports */
-export async function requireAdmin(
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
-  return requireAuth(request, reply);
-}
-
 export async function requireAuth(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -131,6 +123,26 @@ export async function requireAuth(
     return reply.code(401).send({ error: "Unauthorized" });
   }
   request.auth = auth;
+}
+
+/** Super-admin only (ADMIN_TOKEN bearer). */
+export async function requireSuperAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const auth = await resolveAuth(request);
+  if (!auth || auth.kind !== "admin") {
+    return reply.code(403).send({ error: "Super admin required" });
+  }
+  request.auth = auth;
+}
+
+/** @deprecated Use requireSuperAdmin for admin-only routes */
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  return requireSuperAdmin(request, reply);
 }
 
 export function ownerFilter(
@@ -145,4 +157,26 @@ export function ownerFilter(
 
 export function currentUserId(auth: AuthContext): string | null {
   return auth.kind === "user" ? auth.user.id : null;
+}
+
+/** Stable UUID for super-admin OAuth / token bindings (Vercel, etc.). */
+export const PLATFORM_USER_ID = "00000000-0000-4000-8000-000000000001";
+
+/**
+ * Owner key for stored third-party connections.
+ * Super-admin token has no real user row — bind to the platform user instead
+ * so Connect Vercel / GitHub persists across sessions.
+ */
+export function connectionOwnerId(auth: AuthContext): string {
+  if (auth.kind === "admin") return PLATFORM_USER_ID;
+  return auth.user.id;
+}
+
+export async function ensurePlatformUser(): Promise<void> {
+  await query(
+    `INSERT INTO users (id, email, password_hash, name, plan, onboarding_completed)
+     VALUES ($1, 'platform@runbase.internal', '!', 'Platform', 'pro', TRUE)
+     ON CONFLICT (id) DO NOTHING`,
+    [PLATFORM_USER_ID],
+  );
 }

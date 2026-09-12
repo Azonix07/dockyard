@@ -84,7 +84,12 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE INDEX IF NOT EXISTS jobs_status_created_idx ON jobs(status, created_at);
 
--- Idempotent upgrades for existing Dockyard installs
+CREATE INDEX IF NOT EXISTS projects_owner_id_idx ON projects(owner_id);
+CREATE INDEX IF NOT EXISTS databases_owner_id_idx ON databases(owner_id);
+CREATE INDEX IF NOT EXISTS databases_project_id_idx ON databases(project_id);
+CREATE INDEX IF NOT EXISTS projects_status_idx ON projects(status);
+
+-- Idempotent upgrades for existing Runbase installs
 DO $$ BEGIN
   ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES users(id) ON DELETE CASCADE;
 EXCEPTION WHEN others THEN NULL;
@@ -104,3 +109,95 @@ DO $$ BEGIN
   ALTER TABLE databases ADD COLUMN IF NOT EXISTS config JSONB NOT NULL DEFAULT '{}'::jsonb;
 EXCEPTION WHEN others THEN NULL;
 END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS github_login TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS github_user_id BIGINT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS github_access_token TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS github_connected_at TIMESTAMPTZ;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS service_role TEXT NOT NULL DEFAULT 'full';
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS start_command TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS vercel_user_id TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS vercel_username TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS vercel_access_token TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS vercel_team_id TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS vercel_connected_at TIMESTAMPTZ;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS vercel_project_id TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS vercel_project_name TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS vercel_project_url TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS vercel_env_key TEXT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS vercel_linked_at TIMESTAMPTZ;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- Platform owner for super-admin Vercel/GitHub account bindings
+INSERT INTO users (id, email, password_hash, name, plan, onboarding_completed)
+VALUES (
+  '00000000-0000-4000-8000-000000000001',
+  'platform@dockyard.internal',
+  '!',
+  'Platform',
+  'pro',
+  TRUE
+)
+ON CONFLICT (id) DO NOTHING;

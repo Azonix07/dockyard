@@ -7,7 +7,7 @@ const server = http.createServer((req, res) => {
     ok: true,
     path: req.url,
     time: new Date().toISOString(),
-    message: "hello from Dockyard",
+    message: "hello from Runbase",
   });
   res.writeHead(200, { "content-type": "application/json" });
   res.end(body);

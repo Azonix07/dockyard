@@ -1,6 +1,6 @@
 # Windows laptop host setup (Tailscale + Docker)
 
-Run these steps on the Windows machine that will host Dockyard.
+Run these steps on the Windows machine that will host Runbase.
 
 ## 1. Keep the laptop awake
 
@@ -22,7 +22,7 @@ Note the MagicDNS name (e.g. `windows-laptop.tailnet-name.ts.net`).
 
 ```bash
 tailscale ping <windows-hostname>
-curl http://<windows-hostname>:8080/api/health
+curl http://<windows-hostname>:8180/api/health
 ```
 
 ## 3. WSL2 + Docker
@@ -41,7 +41,7 @@ docker run --rm hello-world
 docker info
 ```
 
-Dockyard expects the Docker socket at `/var/run/docker.sock` (WSL/Linux path).
+Runbase expects the Docker socket at `/var/run/docker.sock` (WSL/Linux path).
 
 ## 4. GitHub → laptop (push-to-deploy)
 
@@ -69,7 +69,7 @@ Install a runner on the laptop and call the local API or `docker` directly. No i
 
 Public HTTPS to `/api/webhooks/github` only.
 
-## 5. Run Dockyard
+## 5. Run Runbase
 
 From this repo (inside WSL):
 
@@ -81,12 +81,14 @@ cp .env.example .env
 
 | Service | URL |
 |---------|-----|
-| Dashboard | `http://<tailscale-host>:3000` |
-| API health | `http://<tailscale-host>:8080/api/health` |
+| Dashboard | `http://<tailscale-host>:3100` |
+| API health | `http://<tailscale-host>:8180/api/health` |
+| API readiness | `http://<tailscale-host>:8180/api/ready` |
 | App (path) | `http://<tailscale-host>/p/<project>/` |
+| Proxy health | `http://<tailscale-host>/__runbase/health` |
 | App (host) | `http://<project>.<PUBLIC_HOST>` (needs DNS; path route is easier on Tailscale) |
 
-On the login screen, set **API URL** to `http://<tailscale-host>:8080` if you open the dashboard from another device.
+On the login screen, set **API URL** to `http://<tailscale-host>:8180` if you open the dashboard from another device.
 
 ## 6. GitHub App (recommended)
 
@@ -97,7 +99,19 @@ On the login screen, set **API URL** to `http://<tailscale-host>:8080` if you op
 
 Or use a repo webhook + `GITHUB_TOKEN` (PAT) for clone access.
 
-## 7. First deploy checklist
+## 7. Keep it up automatically
+
+Run once, as Administrator — installs the logon autostart, a 2-minute watchdog,
+and the power/NIC settings that stop Windows dropping the host:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-autostart-dockyard.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\tailscale-serve.ps1
+```
+
+Details and troubleshooting: [reliability.md](reliability.md).
+
+## 8. First deploy checklist
 
 1. Push a repo with a `Dockerfile` (see `examples/hello-api`).
 2. Create a project in the dashboard (enable auto-deploy).

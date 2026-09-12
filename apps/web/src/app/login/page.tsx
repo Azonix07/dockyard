@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@laptop-paas/shared";
 import { useAuth } from "@/components/AuthProvider";
+import { BrandLogo, PRODUCT_NAME } from "@/components/Brand";
 import { api, getApiUrl, setApiUrl } from "@/lib/api";
 
 export default function LoginPage() {
@@ -50,7 +51,7 @@ export default function LoginPage() {
       if (apiBase.trim()) setApiUrl(apiBase.trim());
       else setApiUrl(getApiUrl());
       await loginWithToken(adminToken.trim());
-      router.replace("/dashboard");
+      router.replace("/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -62,8 +63,7 @@ export default function LoginPage() {
     <div className="auth-wrap">
       <aside className="auth-brand">
         <Link href="/" className="logo">
-          <span className="logo-mark" aria-hidden />
-          <span>Dockyard</span>
+          <BrandLogo />
         </Link>
         <div>
           <div className="muted mono" style={{ fontSize: "0.75rem" }}>
@@ -76,7 +76,7 @@ export default function LoginPage() {
       <div className="auth-panel">
         <div className="auth-card">
           <h1>Log in</h1>
-          <p className="sub">Sign in with your Dockyard email.</p>
+          <p className="sub">Sign in with your {PRODUCT_NAME} email.</p>
           <form onSubmit={(e) => void onSubmit(e)}>
             <label className="field">
               Email

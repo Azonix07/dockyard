@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { AuthProvider } from "@/components/AuthProvider";
+import { PRODUCT_NAME } from "@/components/Brand";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Dockyard",
+  title: PRODUCT_NAME,
   description: "Self-hosted deploy platform for services and databases",
 };
 
@@ -22,7 +23,7 @@ export default function RootLayout({
           crossOrigin=""
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>

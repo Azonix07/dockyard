@@ -38,7 +38,7 @@ That script will:
 - Install your Mac’s SSH public key for user `Abhinand`
 - Set firewall rule
 - Remind you about WSL + Docker
-- Optionally start Dockyard
+- Optionally start Runbase
 
 ### 4. On your Mac, test:
 
@@ -63,7 +63,7 @@ ssh cafe "wsl -e bash -lc 'cd ~/dockyard && ./infra/up.sh'"
 From Cursor on Mac you can also open a remote terminal once `ssh cafe` works and tell the agent:  
 “SSH to cafe and run …”
 
-### Install / update Dockyard over SSH
+### Install / update Runbase over SSH
 
 ```bash
 ssh cafe "wsl -e bash -lc '
@@ -98,4 +98,4 @@ Windows Hello **PIN ≠ password**. OpenSSH needs either:
 - [ ] Lid closed + plugged in = stays awake  
 - [ ] Tailscale connected on Windows  
 - [ ] Docker Desktop set to start with Windows / WSL  
-- [ ] Dockyard running (`http://abhinand:3000`)
+- [ ] Runbase running (`http://abhinand:3000`)

@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@laptop-paas/shared";
 import { useAuth } from "@/components/AuthProvider";
+import { BrandLogo, PRODUCT_NAME } from "@/components/Brand";
 import { api, getApiUrl, setApiUrl } from "@/lib/api";
 
 export default function SignupPage() {
@@ -41,8 +42,7 @@ export default function SignupPage() {
     <div className="auth-wrap">
       <aside className="auth-brand">
         <Link href="/" className="logo">
-          <span className="logo-mark" aria-hidden />
-          <span>Dockyard</span>
+          <BrandLogo />
         </Link>
         <div>
           <div className="muted mono" style={{ fontSize: "0.75rem" }}>
@@ -55,7 +55,7 @@ export default function SignupPage() {
       <div className="auth-panel">
         <div className="auth-card">
           <h1>Create account</h1>
-          <p className="sub">Use any email — accounts stay on this Dockyard host.</p>
+          <p className="sub">Use any email — accounts stay on this {PRODUCT_NAME} host.</p>
           <form onSubmit={(e) => void onSubmit(e)}>
             <label className="field">
               Name

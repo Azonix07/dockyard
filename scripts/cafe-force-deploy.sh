@@ -11,7 +11,7 @@ if [[ ! -f "$SCRIPT" ]]; then
   exit 1
 fi
 
-echo "Deploying Dockyard to cafe via SSH…"
+echo "Deploying Runbase to cafe via SSH…"
 # Heredoc / stdin avoids nested quoting bugs on macOS Terminal
 ssh cafe "wsl -d Ubuntu -- bash -s" < "$SCRIPT"
 

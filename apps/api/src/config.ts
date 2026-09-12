@@ -15,10 +15,36 @@ export const config = {
     "\n",
   ),
   githubAppInstallationId: process.env.GITHUB_APP_INSTALLATION_ID ?? "",
+  githubClientId: process.env.GITHUB_CLIENT_ID ?? "",
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
+  /** Public API base used in OAuth callback (e.g. https://host:8444). Falls back to request host. */
+  githubOAuthCallbackBase: process.env.GITHUB_OAUTH_CALLBACK_BASE ?? "",
+  githubAppSlug: process.env.GITHUB_APP_SLUG ?? "",
+  /** Public HTTPS base for hosted apps (Vercel frontends call this). e.g. https://abhinand.tail8a4b6e.ts.net:8443 */
+  publicAppBase: process.env.PUBLIC_APP_BASE ?? "",
+  vercelClientId: process.env.VERCEL_CLIENT_ID ?? "",
+  vercelClientSecret: process.env.VERCEL_CLIENT_SECRET ?? "",
+  vercelOAuthCallbackBase: process.env.VERCEL_OAUTH_CALLBACK_BASE ?? "",
+  /** Integrations Console slug → install URL https://vercel.com/integrations/<slug>/new */
+  vercelIntegrationSlug: process.env.VERCEL_INTEGRATION_SLUG ?? "",
+  /** Live Windows host health JSON from scripts/host-health-daemon.sh */
+  hostHealthPath:
+    process.env.HOST_HEALTH_PATH ?? "/host-data/host-health.json",
+  hostHealthHistoryPath:
+    process.env.HOST_HEALTH_HISTORY_PATH ??
+    "/host-data/host-health-history.jsonl",
   caddyfilePath:
     process.env.CADDYFILE_PATH ?? "/etc/caddy/dynamic/Caddyfile",
   nodeEnv: process.env.NODE_ENV ?? "development",
   allowInsecureWebhooks: process.env.ALLOW_INSECURE_WEBHOOKS === "true",
+  /** AES key material for OAuth tokens at rest (falls back to ADMIN_TOKEN). */
+  tokenEncryptionKey:
+    process.env.TOKEN_ENCRYPTION_KEY || process.env.ADMIN_TOKEN || "",
+  /** Extra allowed CORS origins (comma-separated), plus WEB_ORIGIN. */
+  corsExtraOrigins: (process.env.CORS_EXTRA_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
 };
 
 export function assertConfig() {

@@ -2,7 +2,7 @@
 # Run ON the cafe WSL box (piped via ssh). Safe — no nested quotes needed from Mac.
 set -euo pipefail
 
-echo "==> Dockyard force deploy starting"
+echo "==> Runbase force deploy starting"
 cd /home/abhin/dockyard
 
 git fetch origin

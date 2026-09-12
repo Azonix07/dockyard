@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { BrandLogo } from "@/components/Brand";
 
 export function AppShell({
   children,
@@ -13,9 +14,10 @@ export function AppShell({
   title?: string;
   actions?: React.ReactNode;
 }) {
-  const { user, plan, logout } = useAuth();
+  const { user, plan, authKind, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const isAdmin = authKind === "admin" || user?.id === "admin";
 
   async function onLogout() {
     await logout();
@@ -41,17 +43,18 @@ export function AppShell({
       <header className="topbar">
         <div className="topbar-left">
           <Link href="/dashboard" className="logo">
-            <span className="logo-mark" aria-hidden />
-            <span>Dockyard</span>
+            <BrandLogo />
           </Link>
           <nav className="nav">
             {link("/dashboard", "Projects")}
             {link("/databases", "Databases")}
             {link("/usage", "Usage")}
+            {isAdmin ? link("/admin", "Admin") : null}
           </nav>
         </div>
         <div className="topbar-right">
-          {plan ? <span className="plan-chip">{plan.name}</span> : null}
+          {isAdmin ? <span className="plan-chip admin">Super admin</span> : null}
+          {plan && !isAdmin ? <span className="plan-chip">{plan.name}</span> : null}
           <span className="user-chip">{user?.email}</span>
           <button className="btn ghost" type="button" onClick={() => void onLogout()}>
             Log out

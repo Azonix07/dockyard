@@ -1,16 +1,18 @@
 :root {
-  /* Dockyard: maritime industrial — copper on slate, not purple glass */
-  --bg: #101418;
-  --bg-2: #151b21;
-  --surface: #1a222b;
-  --surface-2: #212b36;
-  --line: #2c3845;
-  --line-2: #3a4a5a;
-  --text: #eef2f5;
-  --muted: #8b98a6;
-  --accent: #d4893a;
-  --accent-2: #f0b36a;
-  --accent-ink: #1a1208;
+  /* Runbase: warm-black infrastructure with a restrained champagne signal */
+  --bg: #0b0d12;
+  --bg-2: #10131a;
+  --surface: #161a23;
+  --surface-2: #1d2230;
+  --line: #292f3d;
+  --line-2: #3a4254;
+  --text: #f5f2ea;
+  --muted: #9b9c98;
+  --brand: #c8a76a;
+  --accent: #c8a76a;
+  --accent-hover: #d8b978;
+  --accent-2: #e0c68f;
+  --accent-ink: #17130c;
   --ok: #3cbf8f;
   --warn: #d6a84a;
   --danger: #e0725f;
@@ -35,7 +37,7 @@ body {
   color: var(--text);
   font-family: var(--font);
   background:
-    linear-gradient(180deg, #12181e 0%, var(--bg) 40%),
+    linear-gradient(180deg, #0e1118 0%, var(--bg) 40%),
     var(--bg);
   background-attachment: fixed;
 }
@@ -84,7 +86,7 @@ h3 {
 }
 
 .btn:hover {
-  background: var(--accent-2);
+  background: var(--accent-hover);
 }
 
 .btn:disabled {
@@ -218,8 +220,8 @@ h3 {
       -12deg,
       transparent,
       transparent 11px,
-      rgba(212, 137, 58, 0.03) 11px,
-      rgba(212, 137, 58, 0.03) 12px
+      rgba(200, 167, 106, 0.035) 11px,
+      rgba(200, 167, 106, 0.035) 12px
     ),
     var(--bg-2);
   display: flex;
@@ -322,17 +324,29 @@ h3 {
 .logo {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  color: var(--text);
 }
 
 .logo-mark {
-  width: 16px;
-  height: 16px;
-  background: var(--accent);
-  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+  display: block;
+  flex: 0 0 auto;
+  color: var(--brand);
+}
+
+.brand-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: "Plus Jakarta Sans", var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.065em;
+  line-height: 1;
+}
+
+.brand-divider {
+  color: var(--brand);
+  font-weight: 600;
+  margin: 0 0.015em;
 }
 
 .app-shell {
@@ -721,6 +735,281 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.admin-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.admin-deploy {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.plan-chip.admin {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.field.compact {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  min-width: 96px;
+}
+
+.github-connect {
+  padding: 8px 0 4px;
+}
+
+.repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px;
+  background: #0c1014;
+}
+
+.repo-row {
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  padding: 10px 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.repo-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.repo-row.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.repo-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.repo-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.repo-badge {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.repo-badge.public {
+  color: #8fbf9a;
+}
+
+.repo-meta {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.var-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.var-head,
+.var-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.4fr) 1fr 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.var-head-4,
+.var-row-4 {
+  grid-template-columns: minmax(140px, 0.38fr) 1fr 56px 36px;
+}
+
+.var-key-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.var-db-badge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+.var-icon-btn {
+  min-width: 0;
+  padding: 8px 6px;
+  font-size: 0.78rem;
+}
+
+.db-connect-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.db-connect-panel select {
+  width: 100%;
+  background: #0c1014;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px 12px;
+}
+
+.linked-dbs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.linked-db-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.linked-db-row .status {
+  margin-left: 8px;
+}
+
+.var-head {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+.var-key,
+.var-val {
+  width: 100%;
+  background: #0c1014;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.analyze-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.role-card {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.role-card.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.role-card span {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.analyze-result {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
 
 @media (max-width: 900px) {

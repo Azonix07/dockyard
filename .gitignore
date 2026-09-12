@@ -12,3 +12,5 @@ apps/web/out/
 .turbo/
 
 *.tsbuildinfo
+.vercel
+.env*

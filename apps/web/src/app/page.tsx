@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import { BrandLogo, PRODUCT_NAME } from "@/components/Brand";
 
 export default function HomePage() {
   const { user, loading } = useAuth();
@@ -24,8 +25,7 @@ export default function HomePage() {
     <div className="landing">
       <nav className="landing-nav">
         <Link href="/" className="logo">
-          <span className="logo-mark" aria-hidden />
-          <span>Dockyard</span>
+          <BrandLogo />
         </Link>
         <div className="cta-row">
           <Link href="/login" className="btn secondary">
@@ -39,11 +39,10 @@ export default function HomePage() {
       <div className="landing-main">
         <section className="landing-copy">
           <div className="eyebrow">Self-hosted PaaS</div>
-          <h1>Dockyard</h1>
+          <h1>{PRODUCT_NAME}</h1>
           <p>
             Ship backends and datastores on hardware you own. Push to GitHub,
-            watch metrics, and keep everything on your Tailscale network —
-            Railway/Render workflow, cafe-laptop footprint.
+            watch metrics, and keep everything on your private network.
           </p>
           <div className="cta-row">
             <Link href="/signup" className="btn">

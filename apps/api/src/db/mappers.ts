@@ -7,6 +7,7 @@ import type {
   ManagedDatabase,
   Project,
   ProjectStatus,
+  ServiceRole,
 } from "@laptop-paas/shared";
 
 type ProjectRow = {
@@ -27,6 +28,13 @@ type ProjectRow = {
   memory_limit_bytes: string | number;
   cpu_nano_cpus: string | number;
   auto_deploy: boolean;
+  service_role?: string | null;
+  start_command?: string | null;
+  vercel_project_id?: string | null;
+  vercel_project_name?: string | null;
+  vercel_project_url?: string | null;
+  vercel_env_key?: string | null;
+  vercel_linked_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -89,6 +97,15 @@ export function mapProject(row: ProjectRow | Record<string, unknown>): Project {
     memoryLimitBytes: Number(r.memory_limit_bytes),
     cpuNanoCpus: Number(r.cpu_nano_cpus),
     autoDeploy: r.auto_deploy,
+    serviceRole: (r.service_role as ServiceRole) || "full",
+    startCommand: r.start_command ?? null,
+    vercelProjectId: r.vercel_project_id ?? null,
+    vercelProjectName: r.vercel_project_name ?? null,
+    vercelProjectUrl: r.vercel_project_url ?? null,
+    vercelEnvKey: r.vercel_env_key ?? null,
+    vercelLinkedAt: r.vercel_linked_at
+      ? r.vercel_linked_at.toISOString()
+      : null,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
   };
