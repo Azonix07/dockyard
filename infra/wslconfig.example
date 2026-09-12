@@ -1,0 +1,38 @@
+# Copy to  C:\Users\<you>\.wslconfig  then run:  wsl --shutdown
+#
+# WSL2 has NO resource limit by default — it will take roughly half the machine's
+# RAM and every CPU core. On a laptop that is also running Windows as a desktop,
+# a Docker build then starves the OS and the whole box appears to freeze or
+# crash. Capping WSL keeps Windows responsive no matter what Docker is doing.
+#
+# Pick the block that matches this machine's total RAM, delete the rest.
+# Check RAM in PowerShell with:
+#   (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB
+
+[wsl2]
+
+# ---- 8 GB machine ----
+memory=4GB
+processors=2
+swap=4GB
+
+# ---- 16 GB machine ----
+# memory=8GB
+# processors=4
+# swap=4GB
+
+# ---- 32 GB machine ----
+# memory=16GB
+# processors=6
+# swap=8GB
+
+# Reclaim freed memory back to Windows instead of holding it forever.
+# Without this, VmmemWSL grows to its cap and never shrinks.
+autoMemoryReclaim=gradual
+
+# Do not let the Linux VM keep running after the last shell closes.
+vmIdleTimeout=60000
+
+[experimental]
+# Shrink the WSL virtual disk when large amounts are freed (image pruning).
+sparseVhd=true

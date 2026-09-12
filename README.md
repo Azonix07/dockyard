@@ -73,6 +73,6 @@ From Mac after cafe is set up:
 
 ## Docs
 
-- Uptime, 502s, self-healing: [docs/reliability.md](docs/reliability.md)
+- Uptime, 502s, self-healing, WSL tuning: [docs/reliability.md](docs/reliability.md)
 - Windows + Tailscale: [docs/setup-windows.md](docs/setup-windows.md)
 - Lid-closed remote access: [docs/remote-access-setup.md](docs/remote-access-setup.md)

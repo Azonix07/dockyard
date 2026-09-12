@@ -110,6 +110,41 @@ and applies the host settings that matter:
 
 Watchdog log: `%LOCALAPPDATA%\Runbase\watchdog.log`
 
+## Layer 0 — WSL itself
+
+**Symptom:** the whole laptop freezes, or "crashes", while Docker is building.
+Task Manager shows `VmmemWSL` at 80%+ CPU and hundreds of MB/s of disk.
+
+WSL2 ships with **no resource limit**: it will take roughly half the machine's
+RAM and every CPU core. On a laptop that is also the desktop you are using, a
+build then starves Windows itself. `VmmemWSL` is not a program — it is the Linux
+VM Docker runs inside, so all of Docker's work appears under that one name.
+
+Fix it once:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-tune-wsl.ps1
+```
+
+That sizes `%USERPROFILE%\.wslconfig` from the machine's actual RAM and core
+count (always leaving Windows at least 4 GB and one core), then restarts WSL.
+`infra/wslconfig.example` has the same thing as a hand-editable template.
+
+### Building without melting the host
+
+The reliability fixes live in the **api** and **worker** images and in the Caddy
+config the worker generates. The **web** image is only the local backup
+dashboard — if your real frontend is on Vercel you rarely need to rebuild it.
+
+```bash
+# Light: rebuild only what matters, reuse the existing web image
+docker compose -f infra/docker-compose.yml build api worker
+docker compose -f infra/docker-compose.yml up -d
+```
+
+Building one service at a time keeps peak CPU and disk far lower than
+`up.sh --build`, which builds everything at once.
+
 ## Deploys
 
 A deploy no longer cuts traffic over on a fixed 2-second sleep. The candidate
